@@ -1,17 +1,29 @@
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>甜度瑞拉｜中秋限定手作禮盒</title>
 
+<!-- ============================================================================
+     Open Graph（LINE / FB / Messenger 分享預覽卡片用）
+     ----------------------------------------------------------------------------
+     LINE 在產生分享預覽時，是靠這些 og: 標籤組出標題／說明／圖片，
+     缺少這些標籤是先前分享會失敗（或顯示空白預覽）的主因。
+     og:image 目前指向網站根目錄下的 og-image-share.png（1200x630，品牌色底＋置中
+     logo），部署時記得把這張圖也放進同一個 repo 的根目錄，並把 og:url 換成正式網域。
+============================================================================ -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="甜度瑞拉｜中秋限定手作禮盒" />
 <meta property="og:title" content="甜度瑞拉｜中秋限定手作禮盒" />
 <meta property="og:description" content="香酥美味．傳遞心意｜中秋限定手作蛋黃酥、紅豆麻糬酥線上訂購" />
-<meta property="og:image" content="https://你的正式網域/og-image.png" />
-<meta property="og:url" content="https://你的正式網域/" />
-<meta property="og:type" content="website" />
+<meta property="og:image" content="https://tienderalla-moon-cake.vercel.app/og-image-share.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://tienderalla-moon-cake.vercel.app/" />
+<meta name="twitter:card" content="summary_large_image" />
 
-
-<title>甜度瑞拉｜中秋限定手作禮盒</title>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -29,8 +41,8 @@ const { useState, useMemo, useCallback, useEffect } = React;
      anon public key（Settings → API），千萬不要放 service_role key。
    • 資料庫結構、RLS 政策、RPC 函式定義請見同一批交付的 schema.sql。
 ============================================================================ */
-const SUPABASE_URL = "https://qmpaclufhftowkfdyfoz.supabase.co"; // TODO: 換成正式的 Supabase URL
-const SUPABASE_ANON_KEY = "sb_publishable_MxGNI7Zj9PNSJhLqOB-t6Q_mJ_dlBiK";   // TODO: 換成正式的 anon public key
+const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co"; // TODO: 換成正式的 Supabase URL
+const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-PUBLIC-KEY";   // TODO: 換成正式的 anon public key
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ============================================================================
