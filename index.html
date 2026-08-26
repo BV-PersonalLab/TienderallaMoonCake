@@ -1268,7 +1268,7 @@ function OrderingFlow({ store }) {
       <Stepper step={Math.min(step, 4)} />
       <div style={{ display: "grid", gridTemplateColumns: cart.length > 0 && step !== 5 ? "1fr 340px" : "1fr", gap: "24px", alignItems: "start" }}>
         <div>
-          {step === 1 && (<><SectionTitle eyebrow="STEP 1" title="選擇出貨日期" sub="日曆上的月亮圖示代表當日剩餘顆數（已扣除您購物車內的選購），愈滿代表可訂購顆數愈充裕" /><CalendarPicker remainingForDate={effectiveRemainingForDate} selectedDate={selectedDate} onSelect={handleSelectDate} /></>)}
+          {step === 1 && (<><SectionTitle eyebrow="STEP 1" title="選擇出貨日期" sub="日曆上的月亮圖示代表當日剩餘顆數，愈滿代表可訂購顆數愈充裕" /><CalendarPicker remainingForDate={effectiveRemainingForDate} selectedDate={selectedDate} onSelect={handleSelectDate} /></>)}
           {step === 2 && selectedDate && <ProductPicker shipDate={selectedDate} remaining={effectiveRemainingForDate(selectedDate)} onAddToCart={handleAddToCartStep2} onBack={() => setStep(1)} />}
           {step === 3 && <ShippingForm onConfirm={handleShippingConfirm} onBack={() => setStep(2)} />}
           {step === 5 && <CheckoutForm cart={cart} onSubmit={handleSubmitOrder} onBack={() => setStep(1)} submitting={submitting} submitError={submitError} />}
@@ -1818,7 +1818,7 @@ function AdminGate({ store }) {
           後台管理員登入
         </div>
         <div style={{ fontSize: "13px", color: TOKENS.color.brownSoft, textAlign: "center", marginBottom: "20px" }}>
-          請使用管理員 Email 與密碼登入（Supabase Auth）
+          請使用管理員 Email 與密碼登入
         </div>
         <Field label="Email" required>
           <TextInput
@@ -1944,7 +1944,7 @@ function App() {
         )}
       </main>
 
-      <footer style={{ textAlign: "center", padding: "24px", fontSize: "12px", color: TOKENS.color.brownSoft }}>甜度瑞拉 · 中秋限定手作禮盒訂購系統（已串接 Supabase 資料庫，含每日產能即時查核與後台權限控管）</footer>
+      <footer style={{ textAlign: "center", padding: "24px", fontSize: "12px", color: TOKENS.color.brownSoft }}>甜度瑞拉 · 中秋限定手作禮盒訂購系統</footer>
     </div>
   );
 }
