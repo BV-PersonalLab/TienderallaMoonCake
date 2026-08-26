@@ -1150,7 +1150,6 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
   const shareText = useMemo(() => {
     const lines = [
       `🥮 中秋限定禮盒 訂單成立`, `訂單編號：${order.id}`,
-      ...order.shipments.map((s) => `出貨日：${s.shipDate}（${SHIP_METHODS.find((m) => m.id === s.shipMethodId)?.label}）`),
       `訂購人：${order.buyerName}`, `金額：$${order.totalAmount}`, `請匯款後至網站回報，謝謝！`,
     ];
     return lines.join("\n");
