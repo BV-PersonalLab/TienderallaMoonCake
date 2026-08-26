@@ -41,8 +41,8 @@ const { useState, useMemo, useCallback, useEffect } = React;
      anon public key（Settings → API），千萬不要放 service_role key。
    • 資料庫結構、RLS 政策、RPC 函式定義請見同一批交付的 schema.sql。
 ============================================================================ */
-const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co"; // TODO: 換成正式的 Supabase URL
-const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-PUBLIC-KEY";   // TODO: 換成正式的 anon public key
+const SUPABASE_URL = "https://qmpaclufhftowkfdyfoz.supabase.co"; // TODO: 換成正式的 Supabase URL
+const SUPABASE_ANON_KEY = "sb_publishable_MxGNI7Zj9PNSJhLqOB-t6Q_mJ_dlBiK";   // TODO: 換成正式的 anon public key
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ============================================================================
