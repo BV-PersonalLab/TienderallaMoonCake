@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -1189,7 +1188,15 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <Button variant="gold" onClick={() => { const url = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`; window.open(url, "_blank"); }}>分享到 LINE</Button>
+        <Button variant="gold" onClick={() => {
+          // 改用 LINE 官方「LINE it!」分享外掛，取代舊版 line.me/R/msg/text/ 深層連結。
+          // 舊版格式在桌機瀏覽器上因第三方 cookie 限制常常「看起來送出了、實際上訊息沒進聊天室」，
+          // social-plugins.line.me/lineit/share 是 LINE 官方文件建議給「網站分享按鈕」用的正式管道，
+          // 手機、桌機都走同一套流程，穩定性好很多，也會一併帶到我們設定好的 Open Graph 預覽圖。
+          const pageUrl = "https://tienderalla-moon-cake.vercel.app/"; // 部署後請換成正式網域
+          const lineItUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(shareText)}`;
+          window.open(lineItUrl, "line_share", "width=500,height=640,noopener,noreferrer");
+        }}>分享到 LINE</Button>
         <Button variant="subtle" onClick={onGoLookup}>前往匯款回報</Button>
       </div>
       <Button variant="ghost" onClick={onNewOrder} style={{ width: "100%" }}>再開一筆新訂單</Button>
