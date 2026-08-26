@@ -398,22 +398,22 @@ const db = {
     return data; // 新訂單編號
   },
 
-  // 顧客查自己的訂單：訂單編號 + 電話 都要對才查得到
-  async lookupOrder(orderId, buyerPhone) {
+  // 顧客查自己的訂單：僅需訂單編號
+  // ⚠️ 已移除電話核對（PM 決策）：任何知道訂單編號的人都查得到這筆訂單的完整明細。
+  async lookupOrder(orderId) {
     const { data, error } = await supabase.rpc("lookup_order", {
       p_order_id: orderId,
-      p_buyer_phone: buyerPhone,
     });
     if (error) throw error;
     if (!data) return null;
     return mapOrderFromDb(data);
   },
 
-  // 回報匯款：一樣要核對訂單編號 + 電話
-  async submitRemittance(orderId, buyerPhone, remit) {
+  // 回報匯款：僅需訂單編號
+  // ⚠️ 已移除電話核對（PM 決策）：任何知道訂單編號的人都可以幫這筆訂單回報／覆蓋匯款資料。
+  async submitRemittance(orderId, remit) {
     const { error } = await supabase.rpc("submit_remittance", {
       p_order_id: orderId,
-      p_buyer_phone: buyerPhone,
       p_method: remit.method,
       p_remit_date: remit.date,
       p_amount: remit.amount,
@@ -719,12 +719,12 @@ function useMooncakeStore() {
     };
   }, [refreshQuota]);
 
-  const lookupOrder = useCallback(async (orderId, buyerPhone) => {
-    return db.lookupOrder(orderId, buyerPhone);
+  const lookupOrder = useCallback(async (orderId) => {
+    return db.lookupOrder(orderId);
   }, []);
 
-  const submitRemittance = useCallback(async (orderId, buyerPhone, remit) => {
-    await db.submitRemittance(orderId, buyerPhone, remit);
+  const submitRemittance = useCallback(async (orderId, remit) => {
+    await db.submitRemittance(orderId, remit);
   }, []);
 
   const toggleReconciled = useCallback(async (orderId) => {
@@ -1150,6 +1150,7 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
   const shareText = useMemo(() => {
     const lines = [
       `🥮 中秋限定禮盒 訂單成立`, `訂單編號：${order.id}`,
+      ...order.shipments.map((s) => `出貨日：${s.shipDate}（${SHIP_METHODS.find((m) => m.id === s.shipMethodId)?.label}）`),
       `訂購人：${order.buyerName}`, `金額：$${order.totalAmount}`, `請匯款後至網站回報，謝謝！`,
     ];
     return lines.join("\n");
@@ -1290,7 +1291,6 @@ function OrderingFlow({ store }) {
 ============================================================================ */
 function RemittanceFlow({ store }) {
   const [orderId, setOrderId] = useState("");
-  const [buyerPhone, setBuyerPhone] = useState("");
   const [order, setOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [looking, setLooking] = useState(false);
@@ -1305,10 +1305,10 @@ function RemittanceFlow({ store }) {
   const [submitError, setSubmitError] = useState(null);
 
   async function handleLookup() {
-    if (!orderId.trim() || !buyerPhone.trim()) { setNotFound(true); return; }
+    if (!orderId.trim()) { setNotFound(true); return; }
     setLooking(true);
     try {
-      const found = await store.lookupOrder(orderId, buyerPhone);
+      const found = await store.lookupOrder(orderId);
       if (found) {
         setOrder(found); setNotFound(false);
         if (found.remittance) {
@@ -1333,7 +1333,7 @@ function RemittanceFlow({ store }) {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await store.submitRemittance(order.id, buyerPhone, {
+      await store.submitRemittance(order.id, {
         method, date, amount: Number(amount),
         bankLast5: method === "銀行轉帳" ? bankLast5 : "",
         jkoName: method === "街口" ? jkoName : "",
@@ -1349,18 +1349,15 @@ function RemittanceFlow({ store }) {
 
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-      <SectionTitle eyebrow="匯款回報" title="填寫匯款資訊" sub="輸入訂單編號與訂購電話查詢，並回報您的匯款資訊" />
+      <SectionTitle eyebrow="匯款回報" title="填寫匯款資訊" sub="輸入訂單編號查詢，並回報您的匯款資訊" />
       <Card style={{ marginBottom: "20px" }}>
         <Field label="訂單編號" required>
-          <TextInput value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="例：MC20260828-1001" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
-        </Field>
-        <Field label="訂購電話" required hint="需與訂購時填寫的電話一致，作為身分核對">
           <div style={{ display: "flex", gap: "8px" }}>
-            <TextInput value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="請輸入訂購時的聯絡電話" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
+            <TextInput value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="例：MC20260828-1001" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
             <Button variant="primary" onClick={handleLookup} disabled={looking} style={{ flexShrink: 0 }}>{looking ? "查詢中…" : "查詢"}</Button>
           </div>
         </Field>
-        {notFound && <div style={{ color: TOKENS.color.persimmonDark, fontSize: "13px", fontWeight: 700 }}>查無此訂單，請確認訂單編號與電話是否正確</div>}
+        {notFound && <div style={{ color: TOKENS.color.persimmonDark, fontSize: "13px", fontWeight: 700 }}>查無此訂單編號，請確認輸入是否正確</div>}
       </Card>
 
       {order && (
@@ -1400,16 +1397,15 @@ function RemittanceFlow({ store }) {
 ============================================================================ */
 function OrderLookupFlow({ store }) {
   const [orderId, setOrderId] = useState("");
-  const [buyerPhone, setBuyerPhone] = useState("");
   const [order, setOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [looking, setLooking] = useState(false);
 
   async function handleLookup() {
-    if (!orderId.trim() || !buyerPhone.trim()) { setNotFound(true); return; }
+    if (!orderId.trim()) { setNotFound(true); return; }
     setLooking(true);
     try {
-      const found = await store.lookupOrder(orderId, buyerPhone);
+      const found = await store.lookupOrder(orderId);
       if (found) { setOrder(found); setNotFound(false); } else { setOrder(null); setNotFound(true); }
     } catch (err) {
       console.error(err);
@@ -1421,18 +1417,15 @@ function OrderLookupFlow({ store }) {
 
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-      <SectionTitle eyebrow="訂單查詢" title="查詢訂單狀態" sub="輸入訂單編號與訂購電話查看明細、金額與匯款狀態" />
+      <SectionTitle eyebrow="訂單查詢" title="查詢訂單狀態" sub="輸入訂單編號查看明細、金額與匯款狀態" />
       <Card style={{ marginBottom: "20px" }}>
         <Field label="訂單編號" required>
-          <TextInput value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="例：MC20260828-1001" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
-        </Field>
-        <Field label="訂購電話" required hint="需與訂購時填寫的電話一致，作為身分核對">
           <div style={{ display: "flex", gap: "8px" }}>
-            <TextInput value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="請輸入訂購時的聯絡電話" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
+            <TextInput value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="例：MC20260828-1001" onKeyDown={(e) => e.key === "Enter" && handleLookup()} />
             <Button variant="primary" onClick={handleLookup} disabled={looking} style={{ flexShrink: 0 }}>{looking ? "查詢中…" : "查詢"}</Button>
           </div>
         </Field>
-        {notFound && <div style={{ color: TOKENS.color.persimmonDark, fontSize: "13px", fontWeight: 700 }}>查無此訂單，請確認訂單編號與電話是否正確</div>}
+        {notFound && <div style={{ color: TOKENS.color.persimmonDark, fontSize: "13px", fontWeight: 700 }}>查無此訂單編號，請確認輸入是否正確</div>}
       </Card>
 
       {order && (
