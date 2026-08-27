@@ -194,6 +194,16 @@ const BANK_INFO = {
   jkoLink: "https://service.jkopay.com/r/transfer?j=Transfer:901860298",
 };
 
+// 部署後請換成正式網域（結尾請保留斜線）。
+const SITE_URL = "https://tienderalla-moon-cake.vercel.app/";
+// 分享訊息裡「匯款回報」頁面的連結：帶 page=remit（與訂單編號）方便買家一點就到，
+// App 元件會在載入時讀這個網址參數，自動切到匯款回報頁並帶入訂單編號。
+function buildRemitPageUrl(orderId) {
+  const params = new URLSearchParams({ page: "remit" });
+  if (orderId) params.set("order", orderId);
+  return `${SITE_URL}?${params.toString()}`;
+}
+
 let ORDER_WINDOW = { start: "2026-09-01", end: "2026-09-24" };
 const STORAGE_NOTE = "產品可於陰涼處常溫保存 5 天";
 
@@ -1149,9 +1159,12 @@ function CheckoutForm({ cart, onSubmit, onBack, submitting, submitError }) {
 function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
   const shareText = useMemo(() => {
     const lines = [
-      `🥮 中秋限定禮盒 訂單成立`, `訂單編號：${order.id}`,
-      ...order.shipments.map((s) => `出貨日：${s.shipDate}（${SHIP_METHODS.find((m) => m.id === s.shipMethodId)?.label}）`),
-      `訂購人：${order.buyerName}`, `金額：$${order.totalAmount}`, `請匯款後至網站回報，謝謝！`,
+      `🥮 中秋限定禮盒 訂單成立通知`,
+      `訂單編號：${order.id}`,
+      `訂購人：${order.buyerName}`,
+      `訂購金額：$${order.totalAmount}`,
+      `請於匯款後至下方連結完成「匯款回報」，謝謝！`,
+      buildRemitPageUrl(order.id),
     ];
     return lines.join("\n");
   }, [order]);
@@ -1189,13 +1202,10 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <Button variant="gold" onClick={() => {
-          // 改用 LINE 官方「LINE it!」分享外掛，取代舊版 line.me/R/msg/text/ 深層連結。
-          // 舊版格式在桌機瀏覽器上因第三方 cookie 限制常常「看起來送出了、實際上訊息沒進聊天室」，
-          // social-plugins.line.me/lineit/share 是 LINE 官方文件建議給「網站分享按鈕」用的正式管道，
-          // 手機、桌機都走同一套流程，穩定性好很多，也會一併帶到我們設定好的 Open Graph 預覽圖。
-          const pageUrl = "https://tienderalla-moon-cake.vercel.app/"; // 部署後請換成正式網域
-          const lineItUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(shareText)}`;
-          window.open(lineItUrl, "line_share", "width=500,height=640,noopener,noreferrer");
+          // 純文字分享：開啟 LINE 的訊息分享連結，讓買家挑選聊天室送出，
+          // 內容（含訂單編號／金額／匯款回報連結）在傳送前都還能編輯。
+          const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`;
+          window.open(lineShareUrl, "line_share", "width=500,height=640,noopener,noreferrer");
         }}>分享到 LINE</Button>
         <Button variant="subtle" onClick={onGoLookup}>前往匯款回報</Button>
       </div>
@@ -1289,8 +1299,8 @@ function OrderingFlow({ store }) {
 /* ============================================================================
    F-2  匯款回報
 ============================================================================ */
-function RemittanceFlow({ store }) {
-  const [orderId, setOrderId] = useState("");
+function RemittanceFlow({ store, initialOrderId }) {
+  const [orderId, setOrderId] = useState(initialOrderId || "");
   const [order, setOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [looking, setLooking] = useState(false);
@@ -1326,6 +1336,14 @@ function RemittanceFlow({ store }) {
       setLooking(false);
     }
   }
+
+  // 從分享連結（?page=remit&order=...）進來時，自動帶入並查詢一次。
+  useEffect(() => {
+    if (initialOrderId) {
+      handleLookup();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canSubmit = date && amount && (method === "銀行轉帳" ? bankLast5.trim() : jkoName.trim()) && !submitting;
 
@@ -1863,7 +1881,15 @@ const NAV = [
 
 function App() {
   const store = useMooncakeStore();
-  const [page, setPage] = useState("order");
+  const initialParams = useMemo(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return { page: p.get("page"), order: p.get("order") };
+    } catch {
+      return { page: null, order: null };
+    }
+  }, []);
+  const [page, setPage] = useState(initialParams.page === "remit" ? "remit" : "order");
   const [mode, setMode] = useState("customer");
 
   useEffect(() => {
@@ -1935,7 +1961,7 @@ function App() {
         ) : (
           <>
             {page === "order" && <OrderingFlow store={store} />}
-            {page === "remit" && <RemittanceFlow store={store} />}
+            {page === "remit" && <RemittanceFlow store={store} initialOrderId={initialParams.order} />}
             {page === "lookup" && <OrderLookupFlow store={store} />}
             {page === "admin-schedule" && <ProductionSchedule store={store} />}
             {page === "admin-orders" && <AllOrdersAdmin store={store} />}
