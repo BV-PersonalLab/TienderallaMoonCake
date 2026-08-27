@@ -506,12 +506,13 @@ const db = {
 };
 
 /* ------------------------------ Small UI primitives ------------------------------ */
-function Button({ children, variant = "primary", size = "md", onClick, disabled, style, type = "button" }) {
+function Button({ children, variant = "primary", size = "md", onClick, disabled, style, type = "button", href }) {
   const base = {
     fontFamily: fontBody, fontWeight: 700, borderRadius: TOKENS.radius.full, border: "none",
     cursor: disabled ? "not-allowed" : "pointer",
     transition: "transform .12s ease, box-shadow .12s ease, opacity .12s ease",
     opacity: disabled ? 0.45 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
+    textDecoration: "none", boxSizing: "border-box",
   };
   const sizes = {
     sm: { padding: "8px 16px", fontSize: "13px" },
@@ -525,15 +526,31 @@ function Button({ children, variant = "primary", size = "md", onClick, disabled,
     subtle: { background: "#F3E9D8", color: TOKENS.color.brown, boxShadow: "none" },
     danger: { background: "#FBEAE6", color: TOKENS.color.persimmonDark, boxShadow: "none" },
   };
+  const sharedProps = {
+    onMouseDown: (e) => !disabled && (e.currentTarget.style.transform = "scale(0.97)"),
+    onMouseUp: (e) => (e.currentTarget.style.transform = "scale(1)"),
+    onMouseLeave: (e) => (e.currentTarget.style.transform = "scale(1)"),
+    style: { ...base, ...sizes[size], ...variants[variant], ...style },
+  };
+
+  // 有 href 時渲染成真正的 <a> 連結（一般頁面導覽），而不是用 window.open 開小彈窗——
+  // 分享到 LINE 這類會觸發「切換到 App」的連結，用 window.open 的彈窗常常會被手機瀏覽器
+  // 擋掉或改走網頁版陽春畫面，導致 LINE 顯示空白訊息框、要求使用者自己輸入文字才能送出。
+  // 改用一般 <a target="_blank"> 連結，行動裝置才能正確跳轉到 LINE App 並帶入完整訊息。
+  if (href && !disabled) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" {...sharedProps}>
+        {children}
+      </a>
+    );
+  }
+
   return (
     <button
       type={type}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = "scale(0.97)")}
-      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      style={{ ...base, ...sizes[size], ...variants[variant], ...style }}
+      {...sharedProps}
     >
       {children}
     </button>
@@ -1168,6 +1185,10 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
     ];
     return lines.join("\n");
   }, [order]);
+  // https://line.me/R/msg/text/?{text} — 官方文件格式，text 直接接在 ? 後面、不需要 key。
+  // 用一般 <a target="_blank"> 連結導覽（見 Button 的 href 支援），而不是 window.open 彈窗，
+  // 手機瀏覽器才能正確切換到 LINE App 並帶入完整訊息，不會出現要手動輸入文字的空白訊息框。
+  const lineShareUrl = useMemo(() => `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`, [shareText]);
 
   return (
     <div>
@@ -1201,12 +1222,7 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <Button variant="gold" onClick={() => {
-          // 純文字分享：開啟 LINE 的訊息分享連結，讓買家挑選聊天室送出，
-          // 內容（含訂單編號／金額／匯款回報連結）在傳送前都還能編輯。
-          const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`;
-          window.open(lineShareUrl, "line_share", "width=500,height=640,noopener,noreferrer");
-        }}>分享到 LINE</Button>
+        <Button variant="gold" href={lineShareUrl}>分享到 LINE</Button>
         <Button variant="subtle" onClick={onGoLookup}>前往匯款回報</Button>
       </div>
       <Button variant="ghost" onClick={onNewOrder} style={{ width: "100%" }}>再開一筆新訂單</Button>
