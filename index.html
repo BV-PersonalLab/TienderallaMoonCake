@@ -1093,7 +1093,7 @@ function ShippingForm({ onConfirm, onBack }) {
   );
 }
 
-function CartSummary({ cart, onRemove, onAddAnotherDate, onCheckout }) {
+function CartSummary({ cart, onRemove, onCheckout }) {
   const grandTotal = cart.reduce((sum, entry) => sum + entry.items.reduce((s, i) => s + i.lineTotal, 0) + entry.shippingFee, 0);
   return (
     <Card style={{ background: "#F3E9D8" }}>
@@ -1124,7 +1124,6 @@ function CartSummary({ cart, onRemove, onAddAnotherDate, onCheckout }) {
         </div>
       )}
       <div style={{ display: "grid", gap: "10px", marginTop: "18px" }}>
-        <Button variant="ghost" onClick={onAddAnotherDate}>＋ 再訂購其他日期</Button>
         <Button variant="primary" disabled={cart.length === 0} onClick={onCheckout}>前往結單 →</Button>
       </div>
     </Card>
@@ -1174,6 +1173,7 @@ function CheckoutForm({ cart, onSubmit, onBack, submitting, submitError }) {
 }
 
 function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
+  const remitUrl = useMemo(() => buildRemitPageUrl(order.id), [order.id]);
   const shareText = useMemo(() => {
     const lines = [
       `🥮 中秋限定禮盒 訂單成立通知`,
@@ -1181,14 +1181,19 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       `訂購人：${order.buyerName}`,
       `訂購金額：$${order.totalAmount}`,
       `請於匯款後至下方連結完成「匯款回報」，謝謝！`,
-      buildRemitPageUrl(order.id),
+      remitUrl,
     ];
     return lines.join("\n");
-  }, [order]);
-  // https://line.me/R/msg/text/?{text} — 官方文件格式，text 直接接在 ? 後面、不需要 key。
-  // 用一般 <a target="_blank"> 連結導覽（見 Button 的 href 支援），而不是 window.open 彈窗，
-  // 手機瀏覽器才能正確切換到 LINE App 並帶入完整訊息，不會出現要手動輸入文字的空白訊息框。
-  const lineShareUrl = useMemo(() => `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`, [shareText]);
+  }, [order, remitUrl]);
+  // line.me/R/msg/text/ 這個「純文字」分享連結，目前在多數手機上的 LINE App 會打開一個
+  // 空白訊息框，要求先手動輸入文字才能選擇聊天室送出（無法帶入預設文字），不符合需求。
+  // 改用 LINE 官方「LINE it!」分享外掛（social-plugins.line.me/lineit/share）：
+  // text 參數會直接變成訊息內容、預先填好，買家只需要選聊天室、按送出，完全不用打字；
+  // url 參數則會附上一張連到「匯款回報」頁的連結預覽卡片。
+  const lineShareUrl = useMemo(() => {
+    const params = new URLSearchParams({ text: shareText, url: remitUrl });
+    return `https://social-plugins.line.me/lineit/share?${params.toString()}`;
+  }, [shareText, remitUrl]);
 
   return (
     <div>
@@ -1261,7 +1266,6 @@ function OrderingFlow({ store }) {
     setCart((prev) => [...prev, { shipDate: selectedDate, items: draftItems, ...shipping }]);
     setDraftItems(null); setSelectedDate(null); setStep(1);
   }
-  function handleAddAnotherDate() { setStep(1); }
   function handleCheckout() { setStep(5); }
 
   const [submitting, setSubmitting] = useState(false);
@@ -1299,14 +1303,14 @@ function OrderingFlow({ store }) {
   return (
     <div style={{ maxWidth: "980px", margin: "0 auto" }}>
       <Stepper step={Math.min(step, 4)} />
-      <div style={{ display: "grid", gridTemplateColumns: cart.length > 0 && step !== 5 ? "1fr 340px" : "1fr", gap: "24px", alignItems: "start" }}>
+      <div className={`order-flow-grid${cart.length > 0 && step !== 5 ? " has-cart" : ""}`}>
         <div>
           {step === 1 && (<><SectionTitle eyebrow="STEP 1" title="選擇出貨日期" sub="日曆上的月亮圖示代表當日剩餘顆數，愈滿代表可訂購顆數愈充裕" /><CalendarPicker remainingForDate={effectiveRemainingForDate} selectedDate={selectedDate} onSelect={handleSelectDate} /></>)}
           {step === 2 && selectedDate && <ProductPicker shipDate={selectedDate} remaining={effectiveRemainingForDate(selectedDate)} onAddToCart={handleAddToCartStep2} onBack={() => setStep(1)} />}
           {step === 3 && <ShippingForm onConfirm={handleShippingConfirm} onBack={() => setStep(2)} />}
           {step === 5 && <CheckoutForm cart={cart} onSubmit={handleSubmitOrder} onBack={() => setStep(1)} submitting={submitting} submitError={submitError} />}
         </div>
-        {cart.length > 0 && step !== 5 && <CartSummary cart={cart} onRemove={(idx) => setCart((prev) => prev.filter((_, i) => i !== idx))} onAddAnotherDate={handleAddAnotherDate} onCheckout={handleCheckout} />}
+        {cart.length > 0 && step !== 5 && <CartSummary cart={cart} onRemove={(idx) => setCart((prev) => prev.filter((_, i) => i !== idx))} onCheckout={handleCheckout} />}
       </div>
     </div>
   );
@@ -1571,7 +1575,7 @@ function ProductionSchedule({ store }) {
         <AdminMetric label="紅豆麻糬酥 尚未出貨顆數" value={Math.round(global.unshipped.hongdou)} tone="gold" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: "20px", alignItems: "start" }}>
+      <div className="admin-schedule-grid">
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
             <button onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))} style={{ background: "none", border: "none", fontSize: "16px", cursor: "pointer", color: TOKENS.color.brown }}>‹</button>
@@ -1929,9 +1933,19 @@ function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         * { box-sizing: border-box; }
-        body { margin: 0; }
+        body { margin: 0; overflow-x: hidden; }
         input:focus, textarea:focus, select:focus { border-color: ${TOKENS.color.persimmon} !important; }
         table th, table td { text-align: left; }
+        /* 選購流程：日曆＋購物車雙欄，手機窄螢幕改直向堆疊，避免購物車被擠出畫面外 */
+        .order-flow-grid { display: grid; gap: 24px; align-items: start; grid-template-columns: 1fr; }
+        .order-flow-grid.has-cart { grid-template-columns: 1fr 340px; }
+        @media (max-width: 760px) {
+          .order-flow-grid.has-cart { grid-template-columns: 1fr; }
+        }
+        .admin-schedule-grid { display: grid; gap: 20px; align-items: start; grid-template-columns: 320px 1fr; }
+        @media (max-width: 760px) {
+          .admin-schedule-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       {store.catalogError && (
