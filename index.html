@@ -1076,7 +1076,7 @@ function ShippingForm({ onConfirm, onBack }) {
           <Field label="收件人姓名" required><TextInput value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="請輸入收件人姓名" /></Field>
           <Field label="聯絡電話" required><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="請輸入手機號碼" /></Field>
           {needsAddress && <Field label="寄送地址" required><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="請輸入完整寄送地址" /></Field>}
-          {needsStore && <Field label="門市名稱及代碼" required hint="例：全家 板橋文化店 (012345)"><TextInput value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="請輸入全家門市名稱及代碼" /></Field>}
+          {needsStore && <Field label="門市名稱及代碼" required hint="例：板橋文化店 (012345)"><TextInput value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="請輸入門市名稱及代碼" /></Field>}
         </Card>
       )}
 
