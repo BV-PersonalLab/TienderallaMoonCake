@@ -175,8 +175,15 @@ let SHIP_METHODS = [
     label: "超商店到店（全家）",
     type: "cvs",
     fee: 60,
-    note: "僅提供全家店到店，出貨日寄出後約需 2-3 天送達",
+    note: "全家店到店，出貨日寄出後約 2-3 天送達",
   },
+  {
+    id: "cvs_711",
+    label: "超商店到店（小七）",
+    type: "cvs",
+    fee: 60,
+    note: "7-11店到店，出貨日寄出後約 2-3 天送達",
+  },   
   {
     id: "courier",
     label: "郵寄 / 黑貓宅急便",
@@ -1712,7 +1719,7 @@ function EditShipmentModal({ order, shipmentIdx, onClose, onSave }) {
             <Field label="收件人姓名" required><TextInput value={shipInfo.recipient || ""} onChange={(e) => setShipInfo({ ...shipInfo, recipient: e.target.value })} /></Field>
             <Field label="聯絡電話" required><TextInput value={shipInfo.phone || ""} onChange={(e) => setShipInfo({ ...shipInfo, phone: e.target.value })} /></Field>
             {needsAddress && <Field label="寄送地址" required><TextInput value={shipInfo.address || ""} onChange={(e) => setShipInfo({ ...shipInfo, address: e.target.value })} /></Field>}
-            {needsStore && <Field label="門市名稱及代碼" required hint="例：全家 板橋文化店 (012345)"><TextInput value={shipInfo.store || ""} onChange={(e) => setShipInfo({ ...shipInfo, store: e.target.value })} /></Field>}
+            {needsStore && <Field label="門市名稱及代碼" required hint="例：板橋文化店 (012345)"><TextInput value={shipInfo.store || ""} onChange={(e) => setShipInfo({ ...shipInfo, store: e.target.value })} /></Field>}
           </>
         )}
 
@@ -1733,6 +1740,95 @@ function EditShipmentModal({ order, shipmentIdx, onClose, onSave }) {
 /* ============================================================================
    B-2 所有訂單 (Admin)
 ============================================================================ */
+/* ============================================================================
+   B-3 訂單對帳 (Admin) — 匯款回報總覽 + 對帳勾選（原本在「所有訂單」的對帳欄位搬來這裡）
+============================================================================ */
+function ReconciliationAdmin({ store }) {
+  const [filter, setFilter] = useState("all"); // all | reported | unreported | reconciled | unreconciled
+  const [search, setSearch] = useState("");
+
+  const totalOrders = store.orders.length;
+  const reportedCount = store.orders.filter((o) => o.remittance).length;
+  const reconciledCount = store.orders.filter((o) => o.reconciled).length;
+
+  const filtered = store.orders.filter((order) => {
+    if (filter === "reported" && !order.remittance) return false;
+    if (filter === "unreported" && order.remittance) return false;
+    if (filter === "reconciled" && !order.reconciled) return false;
+    if (filter === "unreconciled" && order.reconciled) return false;
+    if (search && !`${order.id} ${order.buyerName} ${order.buyerPhone}`.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  return (
+    <div>
+      <SectionTitle title="訂單對帳" sub="檢視每筆訂單的匯款回報內容，核對後勾選「對帳」" />
+
+      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px" }}>
+        <AdminMetric label="總訂單數" value={totalOrders} />
+        <AdminMetric label="已回報匯款" value={reportedCount} tone="gold" />
+        <AdminMetric label="已完成對帳" value={reconciledCount} tone="persimmon" />
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
+        <TextInput placeholder="搜尋訂單編號 / 姓名 / 電話" value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: "280px" }} />
+        {["all", "reported", "unreported", "reconciled", "unreconciled"].map((f) => (
+          <button key={f} onClick={() => setFilter(f)} style={{ padding: "8px 16px", borderRadius: TOKENS.radius.full, cursor: "pointer", fontSize: "13px", fontWeight: 700, border: filter === f ? `2px solid ${TOKENS.color.persimmon}` : `1.5px solid ${TOKENS.color.line}`, background: filter === f ? "#FCEFE9" : TOKENS.color.card, color: TOKENS.color.brown }}>
+            {{ all: "全部", reported: "已回報", unreported: "未回報", reconciled: "已對帳", unreconciled: "未對帳" }[f]}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1080px" }}>
+          <thead>
+            <tr style={{ textAlign: "left", fontSize: "12px", color: TOKENS.color.brownSoft, borderBottom: `2px solid ${TOKENS.color.line}` }}>
+              <th style={{ padding: "10px 8px" }}>對帳</th>
+              <th style={{ padding: "10px 8px" }}>訂單編號</th>
+              <th style={{ padding: "10px 8px" }}>訂購人</th>
+              <th style={{ padding: "10px 8px" }}>訂單金額</th>
+              <th style={{ padding: "10px 8px" }}>匯款狀態</th>
+              <th style={{ padding: "10px 8px" }}>轉帳方式</th>
+              <th style={{ padding: "10px 8px" }}>轉帳日期</th>
+              <th style={{ padding: "10px 8px" }}>回報金額</th>
+              <th style={{ padding: "10px 8px" }}>核對資訊</th>
+              <th style={{ padding: "10px 8px" }}>備註</th>
+              <th style={{ padding: "10px 8px" }}>回報時間</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((order) => {
+              const r = order.remittance;
+              return (
+                <tr key={order.id} style={{ borderBottom: `1px solid ${TOKENS.color.line}`, fontSize: "13px" }}>
+                  <td style={{ padding: "10px 8px" }}>
+                    <input type="checkbox" checked={order.reconciled} onChange={() => store.toggleReconciled(order.id)} style={{ width: "16px", height: "16px", cursor: "pointer" }} />
+                  </td>
+                  <td style={{ padding: "10px 8px", fontFamily: fontNum, fontWeight: 700, color: TOKENS.color.brown }}>{order.id}</td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brown }}>{order.buyerName}<br /><span style={{ color: TOKENS.color.brownSoft, fontSize: "11.5px" }}>{order.buyerPhone}</span></td>
+                  <td style={{ padding: "10px 8px", fontFamily: fontNum, fontWeight: 700, color: TOKENS.color.persimmon }}>${order.totalAmount}</td>
+                  <td style={{ padding: "10px 8px" }}>{r ? <Pill tone="success">已回報</Pill> : <Pill tone="warn">未回報</Pill>}</td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft }}>{r?.method || "—"}</td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft }}>{r?.date || "—"}</td>
+                  <td style={{ padding: "10px 8px", fontFamily: fontNum, color: TOKENS.color.brown }}>{r ? `$${r.amount}` : "—"}</td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft }}>
+                    {r?.bankLast5 ? `後五碼 ${r.bankLast5}` : r?.jkoName ? `街口：${r.jkoName}` : "—"}
+                  </td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft }}>{r?.note || "—"}</td>
+                  <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft, fontSize: "11.5px" }}>
+                    {r?.reportedAt ? new Date(r.reportedAt).toLocaleString("zh-TW") : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px", color: TOKENS.color.brownSoft }}>沒有符合條件的訂單</div>}
+      </div>
+    </div>
+  );
+}
+
 function AllOrdersAdmin({ store }) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
@@ -1760,7 +1856,7 @@ function AllOrdersAdmin({ store }) {
 
   return (
     <div>
-      <SectionTitle title="所有訂單" sub="總覽營收與對帳狀態（每列為一筆出貨明細）" />
+      <SectionTitle title="所有訂單" sub="總覽營收與出貨狀態（每列為一筆出貨明細）" />
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px" }}>
         <AdminMetric label="總訂單數" value={totalOrders} />
         <AdminMetric label="營收金額（已扣運費）" value={`$${revenue}`} tone="persimmon" />
@@ -1781,7 +1877,6 @@ function AllOrdersAdmin({ store }) {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
           <thead>
             <tr style={{ textAlign: "left", fontSize: "12px", color: TOKENS.color.brownSoft, borderBottom: `2px solid ${TOKENS.color.line}` }}>
-              <th style={{ padding: "10px 8px" }}>對帳</th>
               <th style={{ padding: "10px 8px" }}>訂單編號</th>
               <th style={{ padding: "10px 8px" }}>訂購人</th>
               <th style={{ padding: "10px 8px" }}>品項</th>
@@ -1796,7 +1891,6 @@ function AllOrdersAdmin({ store }) {
           <tbody>
             {filtered.map(({ order, shipment, shipmentIdx }) => (
               <tr key={`${order.id}-${shipmentIdx}`} style={{ borderBottom: `1px solid ${TOKENS.color.line}`, fontSize: "13px" }}>
-                <td style={{ padding: "10px 8px" }}><input type="checkbox" checked={order.reconciled} onChange={() => store.toggleReconciled(order.id)} style={{ width: "16px", height: "16px", cursor: "pointer" }} /></td>
                 <td style={{ padding: "10px 8px", fontFamily: fontNum, fontWeight: 700, color: TOKENS.color.brown }}>
                   {order.id}
                   {order.shipments.length > 1 && <div style={{ fontSize: "10.5px", color: TOKENS.color.brownSoft, fontFamily: fontBody, fontWeight: 500 }}>出貨 {shipmentIdx + 1}/{order.shipments.length}</div>}
@@ -1897,6 +1991,7 @@ const NAV = [
   { id: "lookup", label: "訂單查詢", area: "customer" },
   { id: "admin-schedule", label: "製作排程", area: "admin" },
   { id: "admin-orders", label: "所有訂單", area: "admin" },
+  { id: "admin-reconcile", label: "訂單對帳", area: "admin" },
 ];
 
 function App() {
@@ -1995,6 +2090,7 @@ function App() {
             {page === "lookup" && <OrderLookupFlow store={store} />}
             {page === "admin-schedule" && <ProductionSchedule store={store} />}
             {page === "admin-orders" && <AllOrdersAdmin store={store} />}
+            {page === "admin-reconcile" && <ReconciliationAdmin store={store} />}
           </>
         )}
       </main>
