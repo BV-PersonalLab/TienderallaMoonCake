@@ -1187,7 +1187,6 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       `訂購人：${order.buyerName}`,
       `訂購金額：$${order.totalAmount}`,
       `請於匯款後至下方連結完成「匯款回報」，謝謝！`,
-      remitUrl,
     ];
     return lines.join("\n");
   }, [order, remitUrl]);
