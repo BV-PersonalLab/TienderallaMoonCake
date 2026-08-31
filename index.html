@@ -175,15 +175,8 @@ let SHIP_METHODS = [
     label: "超商店到店（全家）",
     type: "cvs",
     fee: 60,
-    note: "全家店到店，出貨日寄出後約 2-3 天送達",
+    note: "僅提供全家店到店，出貨日寄出後約需 2-3 天送達",
   },
-  {
-    id: "cvs_711",
-    label: "超商店到店（小七）",
-    type: "cvs",
-    fee: 60,
-    note: "7-11店到店，出貨日寄出後約 2-3 天送達",
-  },   
   {
     id: "courier",
     label: "郵寄 / 黑貓宅急便",
@@ -761,6 +754,12 @@ function useMooncakeStore() {
     await db.submitRemittance(orderId, remit);
   }, []);
 
+  // 後台專用：送出/編輯匯款回報後，順便重新整理後台的訂單清單，畫面才會立刻反映最新資料。
+  const adminSubmitRemittance = useCallback(async (orderId, remit) => {
+    await db.submitRemittance(orderId, remit);
+    await refreshAdminOrders();
+  }, [refreshAdminOrders]);
+
   const toggleReconciled = useCallback(async (orderId) => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
@@ -829,7 +828,7 @@ function useMooncakeStore() {
     catalogLoaded, catalogError,
     orders, ordersLoading, bookedByDate,
     remainingForDate, productionRemainingForDate,
-    createOrder, lookupOrder, submitRemittance,
+    createOrder, lookupOrder, submitRemittance, adminSubmitRemittance,
     toggleReconciled, updateShipmentStatus, updateShipment, refreshAdminOrders,
     adminSession, adminLoading, adminError, adminSignIn, adminSignOut,
   };
@@ -1083,7 +1082,7 @@ function ShippingForm({ onConfirm, onBack }) {
           <Field label="收件人姓名" required><TextInput value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="請輸入收件人姓名" /></Field>
           <Field label="聯絡電話" required><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="請輸入手機號碼" /></Field>
           {needsAddress && <Field label="寄送地址" required><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="請輸入完整寄送地址" /></Field>}
-          {needsStore && <Field label="門市名稱及代碼" required hint="例：板橋文化店 (012345)"><TextInput value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="請輸入門市名稱及代碼" /></Field>}
+          {needsStore && <Field label="門市名稱及代碼" required hint="例：全家 板橋文化店 (012345)"><TextInput value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="請輸入全家門市名稱及代碼" /></Field>}
         </Card>
       )}
 
@@ -1719,7 +1718,7 @@ function EditShipmentModal({ order, shipmentIdx, onClose, onSave }) {
             <Field label="收件人姓名" required><TextInput value={shipInfo.recipient || ""} onChange={(e) => setShipInfo({ ...shipInfo, recipient: e.target.value })} /></Field>
             <Field label="聯絡電話" required><TextInput value={shipInfo.phone || ""} onChange={(e) => setShipInfo({ ...shipInfo, phone: e.target.value })} /></Field>
             {needsAddress && <Field label="寄送地址" required><TextInput value={shipInfo.address || ""} onChange={(e) => setShipInfo({ ...shipInfo, address: e.target.value })} /></Field>}
-            {needsStore && <Field label="門市名稱及代碼" required hint="例：板橋文化店 (012345)"><TextInput value={shipInfo.store || ""} onChange={(e) => setShipInfo({ ...shipInfo, store: e.target.value })} /></Field>}
+            {needsStore && <Field label="門市名稱及代碼" required hint="例：全家 板橋文化店 (012345)"><TextInput value={shipInfo.store || ""} onChange={(e) => setShipInfo({ ...shipInfo, store: e.target.value })} /></Field>}
           </>
         )}
 
@@ -1743,9 +1742,88 @@ function EditShipmentModal({ order, shipmentIdx, onClose, onSave }) {
 /* ============================================================================
    B-3 訂單對帳 (Admin) — 匯款回報總覽 + 對帳勾選（原本在「所有訂單」的對帳欄位搬來這裡）
 ============================================================================ */
+function EditRemittanceModal({ order, onClose, onSave }) {
+  const r = order.remittance;
+  const [method, setMethod] = useState(r?.method || "銀行轉帳");
+  const [date, setDate] = useState(r?.date || "");
+  const [amount, setAmount] = useState(String(r?.amount ?? order.totalAmount));
+  const [bankLast5, setBankLast5] = useState(r?.bankLast5 || "");
+  const [jkoName, setJkoName] = useState(r?.jkoName || "");
+  const [note, setNote] = useState(r?.note || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const canSave = date && amount && (method === "銀行轉帳" ? bankLast5.trim() : jkoName.trim()) && !saving;
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        method, date, amount: Number(amount),
+        bankLast5: method === "銀行轉帳" ? bankLast5 : "",
+        jkoName: method === "街口" ? jkoName : "",
+        note,
+      });
+    } catch (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(91,58,41,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }} onClick={onClose}>
+      <div style={{ background: TOKENS.color.card, borderRadius: TOKENS.radius.lg, padding: "24px", maxWidth: "480px", width: "100%", maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+          <div style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: "18px", color: TOKENS.color.brown }}>
+            {r ? "編輯匯款回報" : "填寫匯款回報"}｜{order.id}
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "22px", cursor: "pointer", color: TOKENS.color.brownSoft, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ fontSize: "13px", color: TOKENS.color.brownSoft, marginBottom: "16px" }}>
+          訂購人：{order.buyerName}｜應付金額：${order.totalAmount}
+        </div>
+
+        <Field label="轉帳方式" required>
+          <div style={{ display: "flex", gap: "10px" }}>
+            {["街口", "銀行轉帳"].map((m) => (
+              <button key={m} onClick={() => setMethod(m)} style={{ flex: 1, padding: "10px", borderRadius: TOKENS.radius.sm, border: method === m ? `2px solid ${TOKENS.color.persimmon}` : `1.5px solid ${TOKENS.color.line}`, background: method === m ? "#FCEFE9" : "#FFFCF7", cursor: "pointer", fontWeight: 700, color: TOKENS.color.brown }}>{m}</button>
+            ))}
+          </div>
+        </Field>
+        <Field label="轉帳日期" required><TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="轉帳金額" required><TextInput type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="請輸入實際轉帳金額" /></Field>
+        {method === "銀行轉帳" && (
+          <Field label="匯款帳號後五碼" required hint="方便核對匯款紀錄">
+            <TextInput value={bankLast5} onChange={(e) => setBankLast5(e.target.value.slice(0, 5))} placeholder="例：88500" />
+          </Field>
+        )}
+        {method === "街口" && (
+          <Field label="街口帳戶名稱" required hint="買家在街口顯示的帳戶名稱">
+            <TextInput value={jkoName} onChange={(e) => setJkoName(e.target.value)} placeholder="請輸入街口帳戶名稱" />
+          </Field>
+        )}
+        <Field label="備註"><TextArea value={note} onChange={(e) => setNote(e.target.value)} placeholder="選填" /></Field>
+
+        {error && (
+          <div style={{ color: TOKENS.color.persimmonDark, fontSize: "13px", fontWeight: 700, marginBottom: "12px", background: "#FBEAE6", padding: "8px 12px", borderRadius: TOKENS.radius.sm }}>
+            儲存失敗：{error}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "10px" }}>
+          <Button variant="ghost" onClick={onClose} style={{ flex: 1 }} disabled={saving}>取消</Button>
+          <Button variant="primary" onClick={handleSave} disabled={!canSave} style={{ flex: 1 }}>{saving ? "儲存中…" : "儲存"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReconciliationAdmin({ store }) {
   const [filter, setFilter] = useState("all"); // all | reported | unreported | reconciled | unreconciled
   const [search, setSearch] = useState("");
+  const [editingOrderId, setEditingOrderId] = useState(null);
 
   const totalOrders = store.orders.length;
   const reportedCount = store.orders.filter((o) => o.remittance).length;
@@ -1762,7 +1840,7 @@ function ReconciliationAdmin({ store }) {
 
   return (
     <div>
-      <SectionTitle title="訂單對帳" sub="檢視每筆訂單的匯款回報內容，核對後勾選「對帳」" />
+      <SectionTitle title="訂單對帳" sub="檢視每筆訂單的匯款回報內容，可從後台直接編輯或補填回報，核對後勾選「對帳」" />
 
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px" }}>
         <AdminMetric label="總訂單數" value={totalOrders} />
@@ -1794,6 +1872,7 @@ function ReconciliationAdmin({ store }) {
               <th style={{ padding: "10px 8px" }}>核對資訊</th>
               <th style={{ padding: "10px 8px" }}>備註</th>
               <th style={{ padding: "10px 8px" }}>回報時間</th>
+              <th style={{ padding: "10px 8px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -1818,6 +1897,11 @@ function ReconciliationAdmin({ store }) {
                   <td style={{ padding: "10px 8px", color: TOKENS.color.brownSoft, fontSize: "11.5px" }}>
                     {r?.reportedAt ? new Date(r.reportedAt).toLocaleString("zh-TW") : "—"}
                   </td>
+                  <td style={{ padding: "10px 8px" }}>
+                    <button onClick={() => setEditingOrderId(order.id)} style={{ fontSize: "12px", fontWeight: 700, color: TOKENS.color.persimmon, background: "none", border: `1px solid ${TOKENS.color.persimmon}`, borderRadius: TOKENS.radius.full, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {r ? "編輯" : "填寫回報"}
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -1825,6 +1909,21 @@ function ReconciliationAdmin({ store }) {
         </table>
         {filtered.length === 0 && <div style={{ textAlign: "center", padding: "40px", color: TOKENS.color.brownSoft }}>沒有符合條件的訂單</div>}
       </div>
+
+      {editingOrderId && (() => {
+        const editingOrder = store.orders.find((o) => o.id === editingOrderId);
+        if (!editingOrder) return null;
+        return (
+          <EditRemittanceModal
+            order={editingOrder}
+            onClose={() => setEditingOrderId(null)}
+            onSave={async (remit) => {
+              await store.adminSubmitRemittance(editingOrder.id, remit);
+              setEditingOrderId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
