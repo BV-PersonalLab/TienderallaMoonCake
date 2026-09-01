@@ -175,7 +175,14 @@ let SHIP_METHODS = [
     label: "超商店到店（全家）",
     type: "cvs",
     fee: 60,
-    note: "僅提供全家店到店，出貨日寄出後約需 2-3 天送達",
+    note: "全家店到店，出貨日寄出後約 2-3 天送達",
+  },
+  {
+    id: "cvs_711",
+    label: "超商店到店（7-11）",
+    type: "cvs",
+    fee: 60,
+    note: "小七店到店，出貨日寄出後約 2-3 天送達",
   },
   {
     id: "courier",
@@ -454,30 +461,27 @@ const db = {
     if (error) throw error;
   },
 
+  // 後台編輯出貨批次：改走 SECURITY DEFINER 的 admin_update_shipment RPC（見 schema.sql），
+  // 由資料庫端一次做完「更新 shipments → 刪除舊 shipment_items → 寫入新 shipment_items」，
+  // 並在函式內用 is_admin() 檢查權限——不再讓瀏覽器直接對 shipment_items 做 delete/insert，
+  // 因為那三個步驟各自受 RLS 規則管控，容易漏掉「已登入管理員」的寫入權限（過去就是卡在
+  // shipment_items 的 insert 被 RLS 擋下）。
   async updateShipment(shipmentId, newShipmentData) {
-    const { error: shipErr } = await supabase.from("shipments").update({
-      ship_date: newShipmentData.shipDate,
-      ship_method_id: newShipmentData.shipMethodId,
-      ship_info: newShipmentData.shipInfo || null,
-      shipping_fee: newShipmentData.shippingFee,
-    }).eq("id", shipmentId);
-    if (shipErr) throw shipErr;
-
-    const { error: delErr } = await supabase.from("shipment_items").delete().eq("shipment_id", shipmentId);
-    if (delErr) throw delErr;
-
-    const rows = newShipmentData.items.map((it) => ({
-      shipment_id: shipmentId,
-      product_id: it.productId,
-      tier_qty: it.tierQty,
-      tier_label: it.tierLabel,
-      tier_price: it.tierPrice,
-      box_count: it.boxCount,
-    }));
-    if (rows.length > 0) {
-      const { error: insErr } = await supabase.from("shipment_items").insert(rows);
-      if (insErr) throw insErr;
-    }
+    const { error } = await supabase.rpc("admin_update_shipment", {
+      p_shipment_id: shipmentId,
+      p_ship_date: newShipmentData.shipDate,
+      p_ship_method_id: newShipmentData.shipMethodId,
+      p_ship_info: newShipmentData.shipInfo || null,
+      p_shipping_fee: newShipmentData.shippingFee,
+      p_items: newShipmentData.items.map((it) => ({
+        product_id: it.productId,
+        tier_qty: it.tierQty,
+        tier_label: it.tierLabel,
+        tier_price: it.tierPrice,
+        box_count: it.boxCount,
+      })),
+    });
+    if (error) throw error;
   },
 
   // ---- 管理員登入（真正的 Supabase Auth，取代舊版的通關密語） ----
@@ -1187,6 +1191,7 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       `訂購人：${order.buyerName}`,
       `訂購金額：$${order.totalAmount}`,
       `請於匯款後至下方連結完成「匯款回報」，謝謝！`,
+      remitUrl,
     ];
     return lines.join("\n");
   }, [order, remitUrl]);
