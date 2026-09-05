@@ -869,8 +869,8 @@ function CalendarPicker({ remainingForDate, selectedDate, onSelect }) {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  // 最早可訂購日 = 系統日 + 1（例如今天 9/5，最早只能選 9/6，9/5（含）以前都不可選）。
-  const earliestOrderableDate = useMemo(() => addDays(toISODate(new Date()), 1), []);
+  // 最早可訂購日 = 系統日 + 2（例如今天 9/5，最早只能選 9/7，9/6（含）以前都不可選）。
+  const earliestOrderableDate = useMemo(() => addDays(toISODate(new Date()), 2), []);
 
   const monthDates = useMemo(() => {
     const first = viewMonth;
