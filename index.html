@@ -175,7 +175,14 @@ let SHIP_METHODS = [
     label: "超商店到店（全家）",
     type: "cvs",
     fee: 60,
-    note: "僅提供全家店到店，出貨日寄出後約需 2-3 天送達",
+    note: "提供全家店到店，出貨日寄出後約需 2-3 天送達",
+  },
+  {
+    id: "cvs711",
+    label: "超商店到店（小七）",
+    type: "cvs",
+    fee: 60,
+    note: "提供7-11店到店，出貨日寄出後約需 2-3 天送達",
   },
   {
     id: "courier",
@@ -869,7 +876,7 @@ function CalendarPicker({ remainingForDate, selectedDate, onSelect }) {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  // 最早可訂購日 = 系統日 + 2（例如今天 9/5，最早只能選 9/7，9/6（含）以前都不可選）。
+  // 最早可訂購日 = 系統日 + 2（例如今天 9/5，明天 9/6 也不能訂，最早只能選 9/7）。
   const earliestOrderableDate = useMemo(() => addDays(toISODate(new Date()), 2), []);
 
   const monthDates = useMemo(() => {
@@ -1189,18 +1196,39 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
       `訂購金額：$${order.totalAmount}`,
       `請於匯款後至下方連結完成「匯款回報」，謝謝！`,
       remitUrl,
+      ``,
+      `💰 匯款資訊`,
+      `${BANK_INFO.bank}`,
+      `帳號：${BANK_INFO.account}`,
+      ``,
+      `街口帳戶（機構代碼 ${BANK_INFO.jkoInst}）`,
+      `帳號：${BANK_INFO.jkoAccount}`,
     ];
     return lines.join("\n");
   }, [order, remitUrl]);
-  // line.me/R/msg/text/ 這個「純文字」分享連結，目前在多數手機上的 LINE App 會打開一個
-  // 空白訊息框，要求先手動輸入文字才能選擇聊天室送出（無法帶入預設文字），不符合需求。
-  // 改用 LINE 官方「LINE it!」分享外掛（social-plugins.line.me/lineit/share）：
-  // text 參數會直接變成訊息內容、預先填好，買家只需要選聊天室、按送出，完全不用打字；
-  // url 參數則會附上一張連到「匯款回報」頁的連結預覽卡片。
-  const lineShareUrl = useMemo(() => {
-    const params = new URLSearchParams({ text: shareText, url: remitUrl });
-    return `https://social-plugins.line.me/lineit/share?${params.toString()}`;
-  }, [shareText, remitUrl]);
+
+  // 分享機制說明：
+  // - social-plugins.line.me/lineit/share（LINE it!）實測只會把 url 變成連結卡片，
+  //   text 常常被忽略、完全沒帶到聊天室，不符合需求。
+  // - line.me/R/msg/text/?{text} 才是真的「文字訊息」格式，多數情況會把文字帶進
+  //   LINE 的訊息輸入框；但不同手機、不同 LINE 版本仍可能出現框是空的情況。
+  // 為了不管哪種情況買家都拿得到完整內容，點擊時「同時」把全文複製到剪貼簿，
+  // 這樣萬一 LINE 沒有自動帶入文字，買家貼上（Ctrl/Cmd+V 或長按貼上）就能送出，
+  // 不用自己一個字一個字打。
+  const lineShareUrl = useMemo(() => `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`, [shareText]);
+  const [copyHint, setCopyHint] = useState(false);
+
+  async function handleShareLine() {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopyHint(true);
+      window.setTimeout(() => setCopyHint(false), 4000);
+    } catch (err) {
+      // 剪貼簿權限可能被瀏覽器擋下（例如非 https），失敗就算了，不影響繼續開 LINE。
+      console.error("複製到剪貼簿失敗：", err);
+    }
+    window.open(lineShareUrl, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <div>
@@ -1233,10 +1261,15 @@ function OrderConfirmation({ order, onGoLookup, onNewOrder }) {
         <div style={{ marginTop: "12px", fontSize: "12.5px", color: TOKENS.color.persimmonDark, fontWeight: 700, background: "#FBEAE6", padding: "10px 12px", borderRadius: TOKENS.radius.sm }}>⚠️ 匯款完成後，別忘了回到「匯款回報」頁面填寫回報唷！</div>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <Button variant="gold" href={lineShareUrl}>分享到 LINE</Button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: copyHint ? "8px" : "12px" }}>
+        <Button variant="gold" onClick={handleShareLine}>分享到 LINE</Button>
         <Button variant="subtle" onClick={onGoLookup}>前往匯款回報</Button>
       </div>
+      {copyHint && (
+        <div style={{ fontSize: "12px", color: TOKENS.color.success, textAlign: "center", marginBottom: "12px" }}>
+          ✅ 已複製完整訊息內容，若 LINE 訊息框是空的，直接貼上即可送出
+        </div>
+      )}
       <Button variant="ghost" onClick={onNewOrder} style={{ width: "100%" }}>再開一筆新訂單</Button>
     </div>
   );
@@ -1530,6 +1563,7 @@ function HelpGuide() {
   const faqs = [
     { q: "同一天的「顆數」是怎麼算的？", a: "每天可出貨的總顆數，是把您選的所有禮盒的「入數 × 盒數」加總計算。例如蛋黃酥 2入 選 3 盒，就是算 6 顆。" },
     { q: "可以一次訂多個出貨日期嗎？", a: "可以。選完一個日期的商品和出貨方式後，會先放進購物車，接著按「再訂購其他日期」，重複選擇日期→商品→出貨方式，最後一起送出，會是同一張訂單、同一組訂單編號。" },
+    { q: "超商店到店可以選 7-11 嗎？", a: "目前僅提供全家店到店，尚未開放其他超商。" },
     { q: "訂單建立後還能修改品項或日期嗎？", a: "前台目前沒有開放買家自行修改，如需調整品項、出貨日期或出貨方式，請直接透過 LINE／電話聯絡賣家協助處理。" },
     { q: "禮盒可以放多久？", a: `${STORAGE_NOTE}，建議收到後盡快享用最新鮮的風味。` },
     { q: "忘記自己的訂單編號怎麼辦？", a: "訂單編號會顯示在訂購完成的畫面，也可以透過當時「分享到 LINE」傳送的訊息中找回；建議訂購完成後截圖或轉傳給自己保存。" },
